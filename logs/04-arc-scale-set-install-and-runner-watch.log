@@ -1,0 +1,55 @@
+bash-5.3$ kubectl get ns
+NAME                STATUS   AGE
+amazon-cloudwatch   Active   22d
+arc-runners         Active   113s
+arc-systems         Active   5m32s
+default             Active   22d
+kube-node-lease     Active   22d
+kube-public         Active   22d
+kube-system         Active   22d
+radar               Active   12d
+bash-5.3$
+bash-5.3$ kubectl get po -n arc-systems
+NAME                                     READY   STATUS    RESTARTS   AGE
+arc-gha-rs-controller-66987b84cb-bjrlq   1/1     Running   0          5m43s
+bash-5.3$
+bash-5.3$ kubectl get po -n arc-runners
+No resources found in arc-runners namespace.
+bash-5.3$
+bash-5.3$ helm install arc-runner-set oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+  --namespace arc-runners --version $ARC_VERSION \
+  --set githubConfigUrl=https://github.com/ajaychinthapalli/arc-runners-sandbox \
+  --set githubConfigSecret=arc-github-app \
+  --set minRunners=0 --set maxRunners=3
+Pulled: ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set:0.14.2
+Digest: sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
+NAME: arc-runner-set
+LAST DEPLOYED: Mon Oct 12 21:52:13 2026
+NAMESPACE: arc-runners
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+Thank you for installing gha-runner-scale-set.
+
+Your release is named arc-runner-set.
+bash-5.3$
+
+# ---- After triggering .github/workflows/ci.yml (workflow_dispatch) ----
+
+bash-5.3$ kubectl get pods -n arc-runners -w
+NAME                                READY   STATUS    RESTARTS   AGE
+arc-runner-set-st74k-runner-v9qf2   0/1     Pending   0          0s
+arc-runner-set-st74k-runner-v9qf2   0/1     Pending   0          0s
+arc-runner-set-st74k-runner-v9qf2   0/1     ContainerCreating   0          0s
+arc-runner-set-st74k-runner-v9qf2   0/1     ContainerCreating   0          1s
+arc-runner-set-st74k-runner-v9qf2   1/1     Running             0          1s
+arc-runner-set-st74k-runner-v9qf2   0/1     Completed           0          9s
+arc-runner-set-st74k-runner-v9qf2   0/1     Terminating         0          9s
+arc-runner-set-st74k-runner-v9qf2   0/1     Completed           0          10s
+arc-runner-set-st74k-runner-v9qf2   0/1     Completed           0          11s
+arc-runner-set-st74k-runner-v9qf2   0/1     Completed           0          11s
+arc-runner-set-st74k-runner-v9qf2   0/1     Completed           0          11s
+
+# Result: ephemeral runner pod scheduled, ran the job in ~9s, and was cleaned up. ARC 0.14.2 works end to end.

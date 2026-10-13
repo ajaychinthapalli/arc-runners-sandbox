@@ -1,0 +1,91 @@
+# A second copy of kagent's tool server, bound to a read-only ClusterRole.
+# The bundled kagent-tools server has broad RBAC; this one can only get/list/watch
+# ARC-related resources and cannot read Secrets.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: arc-k8s-readonly
+  namespace: kagent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arc-upgrade-readiness-readonly
+rules:
+  - apiGroups: [""]
+    resources: [pods, namespaces, events]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list]
+  - apiGroups: [actions.github.com]
+    resources: [autoscalingrunnersets, autoscalinglisteners, ephemeralrunnersets, ephemeralrunners]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arc-k8s-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arc-upgrade-readiness-readonly
+subjects:
+  - kind: ServiceAccount
+    name: arc-k8s-readonly
+    namespace: kagent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arc-k8s-readonly
+  namespace: kagent
+  labels: {app: arc-k8s-readonly}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: arc-k8s-readonly}
+  template:
+    metadata:
+      labels: {app: arc-k8s-readonly}
+    spec:
+      serviceAccountName: arc-k8s-readonly
+      containers:
+        - name: tools
+          image: ghcr.io/kagent-dev/kagent/tools:0.3.0
+          command: ["/tool-server"]
+          args: ["--port", "8084", "--metrics-port", "8085"]
+          ports: [{containerPort: 8084, name: mcp}]
+          env:
+            - name: KAGENT_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - {name: OTEL_TRACING_ENABLED, value: "false"}
+            - {name: TOKEN_PASSTHROUGH, value: "false"}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arc-k8s-readonly
+  namespace: kagent
+spec:
+  selector: {app: arc-k8s-readonly}
+  ports: [{name: mcp, port: 8084, targetPort: 8084}]
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: arc-k8s-readonly
+  namespace: kagent
+spec:
+  description: Read-only Kubernetes tools for ARC upgrade readiness
+  url: http://arc-k8s-readonly.kagent:8084/mcp
+  protocol: STREAMABLE_HTTP

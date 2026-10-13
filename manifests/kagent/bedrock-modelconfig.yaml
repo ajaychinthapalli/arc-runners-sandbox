@@ -1,0 +1,12 @@
+# Native Bedrock provider. No credentials here: the agent pod uses the IRSA role
+# attached to the arc-readiness-agent ServiceAccount (created with eksctl).
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: bedrock-native
+  namespace: kagent
+spec:
+  provider: Bedrock
+  model: us.anthropic.claude-sonnet-4-6
+  bedrock:
+    region: us-east-2

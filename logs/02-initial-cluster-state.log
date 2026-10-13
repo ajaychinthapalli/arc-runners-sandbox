@@ -1,0 +1,29 @@
+bash-5.3$ kubectl get ns
+NAME                STATUS   AGE
+amazon-cloudwatch   Active   22d
+default             Active   22d
+kube-node-lease     Active   22d
+kube-public         Active   22d
+kube-system         Active   22d
+radar               Active   12d
+bash-5.3$ kubectl get nodes
+NAME                                            STATUS   ROLES    AGE   VERSION
+ip-192-168-103-63.us-east-2.compute.internal    Ready    <none>   22d   v1.36.4-eks-a887778
+ip-192-168-128-165.us-east-2.compute.internal   Ready    <none>   8d    v1.36.4-eks-3b4a6ca
+ip-192-168-144-126.us-east-2.compute.internal   Ready    <none>   22d   v1.36.4-eks-a887778
+ip-192-168-233-47.us-east-2.compute.internal    Ready    <none>   22d   v1.36.4-eks-a887778
+ip-192-168-251-66.us-east-2.compute.internal    Ready    <none>   8d    v1.36.4-eks-3b4a6ca
+bash-5.3$
+bash-5.3$ kubectl get deployments
+No resources found in default namespace.
+bash-5.3$
+bash-5.3$ kubectl get svc
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.100.0.1   <none>        443/TCP   22d
+bash-5.3$
+bash-5.3$ kubectl get pv pvc
+Error from server (NotFound): persistentvolumes "pvc" not found
+bash-5.3$
+
+# NOTE: the last command is a syntax slip. Use `kubectl get pv,pvc -A` (comma, no space).
+# Finding: no arc-systems / arc-runners namespaces -> ARC was not installed yet.

@@ -1,0 +1,84 @@
+bash-5.3$ kubectl get ns
+NAME                STATUS   AGE
+amazon-cloudwatch   Active   22d
+arc-runners         Active   3m45s
+arc-systems         Active   7m24s
+default             Active   22d
+kube-node-lease     Active   22d
+kube-public         Active   22d
+kube-system         Active   22d
+radar               Active   12d
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ kubectl get pods -n arc-systems
+NAME                                     READY   STATUS    RESTARTS   AGE
+arc-gha-rs-controller-66987b84cb-bjrlq   1/1     Running   0          7m57s
+arc-runner-set-694df84f-listener         1/1     Running   0          40s
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ kubectl get autoscalingrunnerset -n arc-runners
+NAME             MINIMUM RUNNERS   MAXIMUM RUNNERS   CURRENT RUNNERS   STATE   PENDING RUNNERS   RUNNING RUNNERS   FINISHED RUNNERS   DELETING RUNNERS
+arc-runner-set   0                 3                                                                                                  
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ kubectl get autoscalinglistener -n arc-systems
+NAME                               GITHUB CONFIGURE URL                                      AUTOSCALINGRUNNERSET NAMESPACE   AUTOSCALINGRUNNERSET NAME
+arc-runner-set-694df84f-listener   https://github.com/ajaychinthapalli/arc-runners-sandbox   arc-runners                      arc-runner-set
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ kubectl logs -n arc-systems deploy/arc-gha-rs-controller --tail=50
+sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller[...]).processNextWorkItem
+	sigs.k8s.io/controller-runtime@v0.23.3/pkg/internal/controller/controller.go:438
+sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller[...]).Start.func1.1
+	sigs.k8s.io/controller-runtime@v0.23.3/pkg/internal/controller/controller.go:313
+2026-10-13T04:52:38Z	ERROR	Reconciler error	{"controller": "autoscalingrunnerset", "controllerGroup": "actions.github.com", "controllerKind": "AutoscalingRunnerSet", "AutoscalingRunnerSet": {"name":"arc-runner-set","namespace":"arc-runners"}, "namespace": "arc-runners", "name": "arc-runner-set", "reconcileID": "c2b5f7be-4a2e-4bd7-9dd3-71a82a5a84e5", "error": "failed to create new actions service request: failed to issue update token if needed: failed to get runner registration token on refresh: request POST https://api.github.com/repos/ajaychinthapalli/arc-runners-sandbox/actions/runners/registration-token failed(status=\"403 Forbidden\", github_request_id=\"FBA3:13B4DB:31D4D77:A4248F3:6ACDB916\"): failed to get runner registration token (403 Forbidden): : Resource not accessible by integration"}
+sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller[...]).reconcileHandler
+	sigs.k8s.io/controller-runtime@v0.23.3/pkg/internal/controller/controller.go:495
+sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller[...]).processNextWorkItem
+	sigs.k8s.io/controller-runtime@v0.23.3/pkg/internal/controller/controller.go:438
+sigs.k8s.io/controller-runtime/pkg/internal/controller.(*Controller[...]).Start.func1.1
+	sigs.k8s.io/controller-runtime@v0.23.3/pkg/internal/controller/controller.go:313
+2026-10-13T04:52:59Z	INFO	AutoscalingRunnerSet	Runner scale set id annotation does not exist. Creating a new runner scale set.	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:52:59Z	INFO	AutoscalingRunnerSet	Creating a new runner scale set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Created/Reused a runner scale set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "id": 1, "runnerGroupName": "Default"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Adding runner scale set ID, name and runner group name as an annotation and url labels	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Updated with runner scale set ID, name and runner group name as an annotation	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "id": 1, "name": "arc-runner-set", "runnerGroupName": "Default"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Latest runner set does not exist. Creating a new runner set.	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Creating a new EphemeralRunnerSet resource	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Adding finalizer	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Created a new EphemeralRunnerSet resource	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-st74k"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Find existing ephemeral runner set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-st74k", "specHash": "594655bfb5"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	AutoscalingListener does not exist.	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Creating a new AutoscalingListener for the runner set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "ephemeralRunnerSetName": "arc-runner-set-st74k"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Creating a new AutoscalingListener resource	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-694df84f-listener", "namespace": "arc-systems"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Adding finalizer	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Successfully added finalizer	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Ephemeral runner counts	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}, "outdated": 0, "pending": 0, "running": 0, "finished": 0, "failed": 0, "deleting": 0}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Scaling comparison	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}, "current": 0, "desired": 0}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Updating status with current runners count	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}, "count": 0}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Ephemeral runner counts	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}, "outdated": 0, "pending": 0, "running": 0, "finished": 0, "failed": 0, "deleting": 0}
+2026-10-13T04:53:02Z	INFO	EphemeralRunnerSet	Scaling comparison	{"version": "0.14.2", "ephemeralrunnerset": {"name":"arc-runner-set-st74k","namespace":"arc-runners"}, "current": 0, "desired": 0}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Successfully added finalizer	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Created a new AutoscalingListener resource	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-694df84f-listener", "namespace": "arc-systems"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Find existing ephemeral runner set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-st74k", "specHash": "594655bfb5"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating a service account for the listener pod	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating listener service accounts	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:02Z	INFO	AutoscalingRunnerSet	Find existing ephemeral runner set	{"version": "0.14.2", "autoscalingrunnerset": {"name":"arc-runner-set","namespace":"arc-runners"}, "name": "arc-runner-set-st74k", "specHash": "594655bfb5"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Created listener service accounts	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating a role for the listener pod	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating listener role	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-runners", "name": "arc-runner-set-694df84f-listener", "rules": [{"verbs":["patch"],"apiGroups":["actions.github.com"],"resources":["ephemeralrunnersets"],"resourceNames":["arc-runner-set-st74k"]},{"verbs":["patch"],"apiGroups":["actions.github.com"],"resources":["ephemeralrunners","ephemeralrunners/status"]}]}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Created listener role	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-runners", "name": "arc-runner-set-694df84f-listener", "rules": [{"verbs":["patch"],"apiGroups":["actions.github.com"],"resources":["ephemeralrunnersets"],"resourceNames":["arc-runner-set-st74k"]},{"verbs":["patch"],"apiGroups":["actions.github.com"],"resources":["ephemeralrunners","ephemeralrunners/status"]}]}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating a role binding for the service account and role	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating listener role binding	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-runners", "name": "arc-runner-set-694df84f-listener", "role": "arc-runner-set-694df84f-listener", "serviceAccountNamespace": "arc-systems", "serviceAccount": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Created listener role binding	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-runners", "name": "arc-runner-set-694df84f-listener", "role": "arc-runner-set-694df84f-listener", "serviceAccountNamespace": "arc-systems", "serviceAccount": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:02Z	INFO	AutoscalingListener	Creating listener config secret	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener-config"}
+2026-10-13T04:53:03Z	INFO	AutoscalingListener	Creating a listener pod	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}}
+2026-10-13T04:53:03Z	INFO	AutoscalingListener	Creating listener pod	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:03Z	INFO	AutoscalingListener	Created listener pod	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:03Z	INFO	AutoscalingListener	Listener pod is not ready	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+2026-10-13T04:53:03Z	INFO	AutoscalingListener	Listener pod is not ready	{"version": "0.14.2", "autoscalinglistener": {"name":"arc-runner-set-694df84f-listener","namespace":"arc-systems"}, "namespace": "arc-systems", "name": "arc-runner-set-694df84f-listener"}
+bash-5.3$ 

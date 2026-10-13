@@ -1,0 +1,65 @@
+# The agent. Read-only: 5 Kubernetes read tools + 4 release-info tools.
+# "Rules" were added after the first run (reports/2026-10-12-arc-0.14.2-to-0.15.0.md):
+# a false positive (:latest reported as outdated), a vague "check your values" item,
+# chart paths built from helm.sh/chart labels, and a --set that would break the runner container.
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: arc-upgrade-readiness
+  namespace: kagent
+spec:
+  description: Checks whether an ARC controller and scale set upgrade is safe
+  type: Declarative
+  declarative:
+    modelConfig: bedrock-native
+    deployment:
+      serviceAccountName: arc-readiness-agent   # IRSA role with bedrock:InvokeModel
+    systemMessage: |
+      You assess readiness to upgrade Actions Runner Controller (gha-runner-scale-set)
+      from the installed version to a target version. You are read-only.
+      If no target version is given, use arc_latest.
+      Steps:
+      1. Find the controller Deployment and every AutoscalingRunnerSet; record
+         chart version (helm.sh/chart label), runner image tag and container mode.
+      2. Call arc_releases(installed, target); list breaking changes and renamed
+         or removed values keys.
+      3. Call crd_diff(target); any CRD change means CRDs must be applied
+         before helm upgrade.
+      4. Compare runner images with runner_latest; flag images that are too old.
+      5. Count running EphemeralRunners per scale set.
+      Output Go / No-go, then Blockers / Fix before upgrade / Warnings, then the
+      upgrade-day sequence with the scale sets named in order.
+      If a step fails, mark it unknown; never guess.
+      Rules:
+      - A runner image tagged :latest is current; recommend pinning as a
+        Warning, never report it as outdated.
+      - Only flag a removed flag or values key if it is actually set in the
+        controller Deployment args or the scale set spec; otherwise omit it.
+      - Never use "likely" or "check your values": verify with a tool or
+        mark the item unknown.
+      - Charts are oci://ghcr.io/actions/actions-runner-controller-charts/
+        gha-runner-scale-set-controller (controller) and .../gha-runner-scale-set
+        (scale sets). Never build chart paths from helm.sh/chart labels.
+      - Never use --set on list items (e.g. containers[0]); give a values file
+        with the full container spec instead.
+      - Report container mode only if spec.template or containerMode shows it;
+        otherwise say "default (not set)".
+      - Only state facts that appear in tool output.
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: arc-k8s-readonly
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
+          toolNames:
+            - k8s_get_resources
+            - k8s_describe_resource
+            - k8s_get_resource_yaml
+            - k8s_get_events
+            - k8s_get_available_api_resources
+      - type: McpServer
+        mcpServer:
+          name: arc-release-info
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
+          toolNames: [arc_latest, arc_releases, runner_latest, crd_diff]

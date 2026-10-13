@@ -1,0 +1,51 @@
+bash-5.3$ cd ~/arc-release-info
+bash-5.3$ sed -i '' 's/"mcp\[cli\]"/"mcp[cli]<2"/' Dockerfile
+bash-5.3$ grep pip Dockerfile
+RUN pip install --no-cache-dir "mcp[cli]<2" httpx kubernetes pyyaml
+bash-5.3$ 
+bash-5.3$ docker buildx build --platform linux/amd64 \
+  --build-arg HELM_VERSION=$HELM_VERSION \
+  -t $ECR/arc-release-info:0.1.1 --push .
+[+] Building 25.7s (11/11) FINISHED                                                                                                          docker:desktop-linux
+ => [internal] load build definition from Dockerfile                                                                                                         0.0s
+ => => transferring dockerfile: 601B                                                                                                                         0.0s
+ => [internal] load metadata for docker.io/library/python:3.12-slim                                                                                          0.6s
+ => [auth] library/python:pull token for registry-1.docker.io                                                                                                0.0s
+ => [internal] load .dockerignore                                                                                                                            0.0s
+ => => transferring context: 2B                                                                                                                              0.0s
+ => [1/4] FROM docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1                                    0.0s
+ => => resolve docker.io/library/python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1                                    0.0s
+ => [internal] load build context                                                                                                                            0.0s
+ => => transferring context: 31B                                                                                                                             0.0s
+ => CACHED [2/4] RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates  && curl -fsSL https://get.helm.sh/helm-v4.2.4-linux  0.0s
+ => [3/4] RUN pip install --no-cache-dir "mcp[cli]<2" httpx kubernetes pyyaml                                                                               13.6s
+ => [4/4] COPY server.py /app/server.py                                                                                                                      0.0s 
+ => exporting to image                                                                                                                                      11.5s 
+ => => exporting layers                                                                                                                                      2.3s 
+ => => exporting manifest sha256:d4fc0cee893659dcd143ed58d293bf50d2c1474e9f6efaa1a93a4e326e75426d                                                            0.0s 
+ => => exporting config sha256:b08d14661bbab1c4384207563c4dd404d21a7fb5677980c5bcbd543189e844fd                                                              0.0s 
+ => => exporting attestation manifest sha256:73aa78171e9ebc700b52d1398b33b0fecb812e7f10ea05833f80281693e7b4fa                                                0.0s 
+ => => exporting manifest list sha256:ae1ecdc50b9a9d1b9841dd1d706f03910fee62323e524d7c8ee275ff9d560f96                                                       0.0s
+ => => naming to <AWS_ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/arc-release-info:0.1.1                                                                         0.0s
+ => => pushing layers                                                                                                                                        8.0s
+ => => pushing manifest for <AWS_ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com/arc-release-info:0.1.1@sha256:ae1ecdc50b9a9d1b9841dd1d706f03910fee62323e524d7c8ee2  1.1s
+ => [auth] sharing credentials for <AWS_ACCOUNT_ID>.dkr.ecr.us-east-2.amazonaws.com                                                                              0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/nnpbeqx19wlkxqg33vimux2h2
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ kubectl set image deploy/arc-release-info -n kagent server=$ECR/arc-release-info:0.1.1
+kubectl rollout status deploy/arc-release-info -n kagent
+kubectl logs deploy/arc-release-info -n kagent --tail=20
+deployment.apps/arc-release-info image updated
+Waiting for deployment "arc-release-info" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "arc-release-info" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "arc-release-info" rollout to finish: 1 old replicas are pending termination...
+deployment "arc-release-info" successfully rolled out
+Found 2 pods, using pod/arc-release-info-5757fb4d47-f4s2b
+bash-5.3$ 
+bash-5.3$ kubectl get remotemcpserver arc-release-info -n kagent
+kubectl get remotemcpserver arc-release-info -n kagent -o yaml | grep -A30 discoveredTools | grep 'name:'
+NAME               PROTOCOL          URL                                       ACCEPTED
+arc-release-info   STREAMABLE_HTTP   http://arc-release-info.kagent:8080/mcp   False
+bash-5.3$ 

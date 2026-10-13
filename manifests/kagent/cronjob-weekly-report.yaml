@@ -1,0 +1,39 @@
+# Step 10 (NOT YET TESTED on the cluster): weekly run posted to Slack.
+# Calls the agent over A2A through the kagent controller. Before applying, test the
+# same curl from your laptop via `kubectl -n kagent port-forward svc/kagent-controller 8083:8083`
+# and confirm the jq path returns the report text.
+#
+# kubectl create secret generic arc-readiness-slack -n kagent --from-literal=webhook='https://hooks.slack.com/services/...'
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arc-upgrade-readiness-weekly
+  namespace: kagent
+spec:
+  schedule: "0 15 * * 1"        # Mondays 15:00 UTC = 8:00 AM Phoenix (no DST)
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: alpine:3
+              env:
+                - name: SLACK_WEBHOOK
+                  valueFrom: {secretKeyRef: {name: arc-readiness-slack, key: webhook}}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  apk add --no-cache curl jq >/dev/null
+                  REPORT=$(curl -sf --max-time 300 \
+                    http://kagent-controller.kagent:8083/api/a2a/kagent/arc-upgrade-readiness/ \
+                    -H 'Content-Type: application/json' \
+                    -d '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{"role":"user","messageId":"weekly","parts":[{"kind":"text","text":"Assess upgrading ARC to the latest gha-runner-scale-set release."}]}}}' \
+                    | jq -r '.result.artifacts[-1].parts[]? | select(.kind=="text") | .text')
+                  [ -n "$REPORT" ] || REPORT="ARC readiness run returned no report; check agent logs."
+                  jq -n --arg t "*ARC upgrade readiness (ac-ws-dev-use2)*\n$REPORT" '{text: $t}' \
+                    | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$SLACK_WEBHOOK"

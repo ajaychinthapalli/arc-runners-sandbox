@@ -1,0 +1,82 @@
+# Custom MCP tool server: ARC/runner release data and CRD diff.
+# Apply with your ECR registry substituted:
+#   envsubst < manifests/kagent/arc-release-info.yaml | kubectl apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: arc-release-info
+  namespace: kagent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: arc-release-info-crd-reader
+rules:
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: arc-release-info-crd-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: arc-release-info-crd-reader
+subjects:
+  - kind: ServiceAccount
+    name: arc-release-info
+    namespace: kagent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arc-release-info
+  namespace: kagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: arc-release-info}
+  template:
+    metadata:
+      labels: {app: arc-release-info}
+    spec:
+      serviceAccountName: arc-release-info
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: server
+          image: ${ECR}/arc-release-info:0.1.1   # 0.1.0 crashed: unpinned MCP SDK 2.x
+          ports: [{containerPort: 8080, name: mcp}]
+          env:
+            - name: GITHUB_TOKEN   # optional; avoids the 60 req/h unauthenticated limit
+              valueFrom:
+                secretKeyRef: {name: arc-release-info-github, key: token, optional: true}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arc-release-info
+  namespace: kagent
+spec:
+  selector: {app: arc-release-info}
+  ports: [{name: mcp, port: 8080, targetPort: 8080}]
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: arc-release-info
+  namespace: kagent
+spec:
+  description: ARC and runner release data, CRD diff against a target chart
+  url: http://arc-release-info.kagent:8080/mcp
+  protocol: STREAMABLE_HTTP

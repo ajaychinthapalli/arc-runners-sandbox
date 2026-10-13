@@ -1,0 +1,9 @@
+.env
+*.pem
+kagent-values.yaml
+a2a-response.json
+__pycache__/
+*.pyc
+
+# keep captured logs even if a global gitignore ignores *.log
+!logs/*.log

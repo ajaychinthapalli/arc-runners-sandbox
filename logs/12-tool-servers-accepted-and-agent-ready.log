@@ -1,0 +1,49 @@
+# ---- arc-release-info 0.1.1: new pod healthy ----
+# (`kubectl logs deploy/...` during the rollout picked the OLD crashing pod: "Found 2 pods".
+#  Use the label selector to read the new pod.)
+
+bash-5.3$ kubectl get pods -n kagent -l app=arc-release-info
+NAME                                READY   STATUS    RESTARTS   AGE
+arc-release-info-5757fb4d47-f4s2b   1/1     Running   0          59s
+bash-5.3$ kubectl logs -n kagent -l app=arc-release-info --tail=20
+INFO:     Waiting for application startup.
+[10/13/26 05:58:21] INFO     StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+[10/13/26 05:59:06] INFO     Created new transport with session ID: e8bac6822dd44b8c9013d4dcdc3da033
+INFO:     192.168.167.9:49204 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     192.168.167.9:49204 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     192.168.167.9:49204 - "POST /mcp HTTP/1.1" 200 OK
+                    INFO     Processing request of type ListToolsRequest
+                    INFO     Terminating session: e8bac6822dd44b8c9013d4dcdc3da033
+INFO:     192.168.167.9:49204 - "DELETE /mcp HTTP/1.1" 200 OK
+
+bash-5.3$ kubectl get remotemcpserver -n kagent
+NAME                 PROTOCOL          URL                                       ACCEPTED
+arc-k8s-readonly     STREAMABLE_HTTP   http://arc-k8s-readonly.kagent:8084/mcp   True
+arc-release-info     STREAMABLE_HTTP   http://arc-release-info.kagent:8080/mcp   True
+kagent-tool-server   STREAMABLE_HTTP   http://kagent-tools.kagent:8084/mcp       True
+
+# ---- Apply the agent ----
+
+bash-5.3$ kubectl apply -f arc-upgrade-readiness-agent.yaml
+agent.kagent.dev/arc-upgrade-readiness created
+bash-5.3$ kubectl get agents -n kagent
+NAME                    TYPE          RUNTIME   READY   ACCEPTED
+arc-upgrade-readiness   Declarative   go        False   True
+arc-upgrade-readiness-d5bc997fd-vxn98            0/1     ContainerCreating   0             1s
+
+# ~30s later
+bash-5.3$ kubectl get agents -n kagent
+NAME                    TYPE          RUNTIME   READY   ACCEPTED
+arc-upgrade-readiness   Declarative   go        True    True
+bash-5.3$ kubectl get pods -n kagent | grep arc-upgrade-readiness
+arc-upgrade-readiness-d5bc997fd-vxn98            1/1     Running   0             33s
+bash-5.3$ kubectl get pod -n kagent <agent pod> -o jsonpath='{.spec.serviceAccountName}{"\n"}'
+arc-readiness-agent
+
+# Agent startup log: see log 13 (tool filters 5 + 4, Bedrock Converse model initialised).
+
+# ---- After the first run ----
+bash-5.3$ kubectl logs -n kagent -l app=arc-release-info --tail=40 | grep -iE 'error|traceback|exception' || echo "no errors"
+no errors

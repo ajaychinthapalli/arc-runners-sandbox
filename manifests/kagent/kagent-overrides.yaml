@@ -1,0 +1,17 @@
+# Disable the 10 bundled demo agents and Grafana MCP (kagent chart 0.10.3).
+# Without this, every demo agent sits in CreateContainerConfigError because the
+# default provider's API key secret does not exist. Keep kagent-tools and kmcp.
+#
+# helm upgrade --install kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent \
+#   --namespace kagent --version $KAGENT_VERSION -f kagent-values.yaml -f kagent-overrides.yaml
+k8s-agent:            {enabled: false}
+kgateway-agent:       {enabled: false}
+istio-agent:          {enabled: false}
+promql-agent:         {enabled: false}
+observability-agent:  {enabled: false}
+argo-rollouts-agent:  {enabled: false}
+helm-agent:           {enabled: false}
+cilium-policy-agent:  {enabled: false}
+cilium-manager-agent: {enabled: false}
+cilium-debug-agent:   {enabled: false}
+grafana-mcp:          {enabled: false}

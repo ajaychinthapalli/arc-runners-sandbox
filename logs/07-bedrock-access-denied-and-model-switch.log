@@ -1,0 +1,151 @@
+# ---- Attempt 1: Claude Sonnet 5.5 via the us. inference profile ----
+
+bash-5.3$ aws bedrock-runtime converse --region $REGION --model-id $BEDROCK_MODEL \
+  --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]' \
+  --query 'output.message.content[0].text' --output text
+
+aws: [ERROR]: An error occurred (AccessDeniedException) when calling the Converse operation: anthropic.claude-sonnet-5-5 is not available for this account. You can explore other available models on Amazon Bedrock. For additional access options, contact AWS Sales at https://aws.amazon.com/contact-us/sales-support/
+
+# ---- Diagnose: which part of model access is missing? ----
+
+bash-5.3$ aws bedrock get-foundation-model-availability --region $REGION \
+  --model-id anthropic.claude-sonnet-5-5
+{
+    "modelId": "anthropic.claude-sonnet-5-5",
+    "agreementAvailability": {
+        "status": "NOT_AVAILABLE"
+    },
+    "authorizationStatus": "AUTHORIZED",
+    "entitlementAvailability": "AVAILABLE",
+    "regionAvailability": "AVAILABLE"
+}
+
+# ---- Accept the model agreement from the CLI ----
+
+bash-5.3$ OFFER=$(aws bedrock list-foundation-model-agreement-offers --region $REGION \
+  --model-id anthropic.claude-sonnet-5-5 \
+  --query 'offers[0].offerToken' --output text)
+bash-5.3$ echo $OFFER
+<offer token redacted>
+bash-5.3$
+bash-5.3$ aws bedrock create-foundation-model-agreement --region $REGION \
+  --model-id anthropic.claude-sonnet-5-5 --offer-token "$OFFER"
+{
+    "modelId": "anthropic.claude-sonnet-5-5"
+}
+bash-5.3$ aws bedrock get-foundation-model-availability --region $REGION \
+  --model-id anthropic.claude-sonnet-5-5 --query agreementAvailability
+{
+    "status": "PENDING"
+}
+# (PENDING x3, then:)
+bash-5.3$ while true; do
+  aws bedrock get-foundation-model-availability --region us-east-2 \
+    --model-id anthropic.claude-sonnet-5-5 --query agreementAvailability.status --output text
+  sleep 30
+done
+AVAILABLE
+AVAILABLE
+^Z
+[4]+  Stopped                    sleep 30
+# NOTE: Ctrl+Z suspends a loop; use Ctrl+C to stop it (or `kill %4` afterwards).
+
+# ---- Still denied after AVAILABLE ----
+
+bash-5.3$ aws bedrock-runtime converse --region $REGION --model-id $BEDROCK_MODEL \
+  --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]' \
+  --query 'output.message.content[0].text' --output text
+
+aws: [ERROR]: An error occurred (AccessDeniedException) when calling the Converse operation: anthropic.claude-sonnet-5-5 is not available for this account. ...
+
+# ---- Check every region the us. profile routes to ----
+
+bash-5.3$ aws bedrock get-inference-profile --region $REGION \
+  --inference-profile-identifier $BEDROCK_MODEL \
+  --query 'models[].modelArn' --output text | tr '\t' '\n'
+arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-5-5
+arn:aws:bedrock:us-east-2::foundation-model/anthropic.claude-sonnet-5-5
+arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-5-5
+bash-5.3$ for R in us-east-1 us-east-2 us-west-2; do ... done
+us-east-1: AVAILABLE
+us-east-2: AVAILABLE
+us-west-2: AVAILABLE
+
+bash-5.3$ aws bedrock-runtime converse --region $REGION --model-id global.anthropic.claude-sonnet-5-5 \
+  --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]' \
+  --query 'output.message.content[0].text' --output text
+
+aws: [ERROR]: An error occurred (AccessDeniedException) when calling the Converse operation: anthropic.claude-sonnet-5-5 is not available for this account. ...
+
+# Conclusion: agreement accepted everywhere but the account still cannot invoke Sonnet 5.5
+# (propagation delay or account-level gating). Switched to a model the account can use.
+
+# ---- Profiles that exist in us-east-2 ----
+
+bash-5.3$ aws bedrock list-inference-profiles --region $REGION \
+  --query "inferenceProfileSummaries[?starts_with(inferenceProfileId,'us.anthropic')].inferenceProfileId" \
+  --output text | tr '\t' '\n'
+us.anthropic.claude-3-haiku-20240307-v1:0
+us.anthropic.claude-opus-4-1-20250805-v1:0
+us.anthropic.claude-opus-4-5-20251101-v1:0
+us.anthropic.claude-opus-4-7
+us.anthropic.claude-sonnet-4-5-20250929-v1:0
+us.anthropic.claude-sonnet-4-20250514-v1:0
+us.anthropic.claude-opus-4-8
+us.anthropic.claude-fable-5
+us.anthropic.claude-sonnet-5
+us.anthropic.claude-opus-5
+us.anthropic.claude-haiku-4-5-20251001-v1:0
+us.anthropic.claude-opus-4-6-v1
+us.anthropic.claude-fable-5-1
+us.anthropic.claude-opus-5-5
+us.anthropic.claude-sonnet-4-6
+us.anthropic.claude-sonnet-5-5
+us.anthropic.claude-haiku-5-5
+
+# ---- Attempt 2: Claude Sonnet 4.6 -> works ----
+
+bash-5.3$ export BEDROCK_MODEL=us.anthropic.claude-sonnet-4-6
+bash-5.3$ aws bedrock-runtime converse --region $REGION --model-id $BEDROCK_MODEL \
+  --messages '[{"role":"user","content":[{"text":"Reply with OK"}]}]' \
+  --query 'output.message.content[0].text' --output text
+OK
+
+# ---- IAM policy, IRSA ServiceAccount, ModelConfig ----
+
+bash-5.3$ aws iam create-policy --policy-name arc-readiness-bedrock \
+  --policy-document file://bedrock-invoke.json
+{
+    "Policy": {
+        "PolicyName": "arc-readiness-bedrock",
+        "Arn": "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/arc-readiness-bedrock",
+        "DefaultVersionId": "v1",
+        "IsAttachable": true,
+        "CreateDate": "2026-10-13T05:20:35+00:00"
+    }
+}
+bash-5.3$ eksctl create iamserviceaccount --cluster $CLUSTER --region $REGION \
+  --namespace kagent --name arc-readiness-agent \
+  --attach-policy-arn arn:aws:iam::$ACCOUNT:policy/arc-readiness-bedrock \
+  --approve
+2026-10-12 22:21:03 [ℹ]  1 existing iamserviceaccount(s) (external-secrets/external-secrets) will be excluded
+2026-10-12 22:21:03 [ℹ]  1 iamserviceaccount (kagent/arc-readiness-agent) was included (based on the include/exclude rules)
+2026-10-12 22:21:03 [!]  serviceaccounts that exist in Kubernetes will be excluded, use --override-existing-serviceaccounts to override
+2026-10-12 22:21:03 [ℹ]  1 task: {
+    2 sequential sub-tasks: {
+        create IAM role for serviceaccount "kagent/arc-readiness-agent",
+        create serviceaccount "kagent/arc-readiness-agent",
+    } }
+2026-10-12 22:21:03 [ℹ]  building iamserviceaccount stack "eksctl-ac-ws-dev-use2-addon-iamserviceaccount-kagent-arc-readiness-agent"
+2026-10-12 22:21:03 [ℹ]  deploying stack "eksctl-ac-ws-dev-use2-addon-iamserviceaccount-kagent-arc-readiness-agent"
+2026-10-12 22:21:03 [ℹ]  waiting for CloudFormation stack "eksctl-ac-ws-dev-use2-addon-iamserviceaccount-kagent-arc-readiness-agent"
+2026-10-12 22:21:33 [ℹ]  waiting for CloudFormation stack "eksctl-ac-ws-dev-use2-addon-iamserviceaccount-kagent-arc-readiness-agent"
+2026-10-12 22:21:33 [ℹ]  created serviceaccount "kagent/arc-readiness-agent"
+bash-5.3$ kubectl get sa arc-readiness-agent -n kagent -o jsonpath='{.metadata.annotations}'
+{"eks.amazonaws.com/role-arn":"arn:aws:iam::<AWS_ACCOUNT_ID>:role/eksctl-ac-ws-dev-use2-addon-iamserviceaccount-Role1-x7PQsRkKrLLy"}
+bash-5.3$ kubectl apply -f - <<EOF ... ModelConfig bedrock-native ... EOF
+modelconfig.kagent.dev/bedrock-native created
+bash-5.3$ kubectl get modelconfig -n kagent
+NAME                   PROVIDER   MODEL
+bedrock-native         Bedrock    us.anthropic.claude-sonnet-4-6
+default-model-config   OpenAI     gpt-4.1-mini

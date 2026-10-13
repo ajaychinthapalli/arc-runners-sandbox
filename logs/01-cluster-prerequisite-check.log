@@ -1,0 +1,88 @@
+bash-5.3$ kubectl get crd | grep actions.github.com
+bash-5.3$ 
+bash-5.3$ helm list -A
+NAME                        	NAMESPACE  	REVISION	UPDATED                             	STATUS  	CHART                             	APP VERSION
+aws-load-balancer-controller	kube-system	1       	2026-10-04 14:41:36.908029 -0700 MST	deployed	aws-load-balancer-controller-3.5.0	v3.5.0     
+radar                       	radar      	1       	2026-09-30 00:31:28.497334 -0700 MST	deployed	radar-1.15.0                      	1.15.0     
+bash-5.3$ 
+bash-5.3$ kubectl get pods -A
+NAMESPACE           NAME                                                              READY   STATUS    RESTARTS     AGE
+amazon-cloudwatch   amazon-cloudwatch-observability-controller-manager-d48468f2dmf2   1/1     Running   0            8d
+amazon-cloudwatch   cloudwatch-agent-2hq8x                                            1/1     Running   1 (8d ago)   8d
+amazon-cloudwatch   cloudwatch-agent-4s4hk                                            1/1     Running   0            22d
+amazon-cloudwatch   cloudwatch-agent-sjlwt                                            1/1     Running   0            22d
+amazon-cloudwatch   cloudwatch-agent-x2bnm                                            1/1     Running   0            8d
+amazon-cloudwatch   cloudwatch-agent-zkcv9                                            1/1     Running   0            22d
+amazon-cloudwatch   fluent-bit-7rh5k                                                  1/1     Running   0            8d
+amazon-cloudwatch   fluent-bit-892td                                                  1/1     Running   0            22d
+amazon-cloudwatch   fluent-bit-czx8q                                                  1/1     Running   0            8d
+amazon-cloudwatch   fluent-bit-sgks6                                                  1/1     Running   0            22d
+amazon-cloudwatch   fluent-bit-xtnrq                                                  1/1     Running   0            22d
+kube-system         aws-load-balancer-controller-7c48cfd896-f4lhp                     1/1     Running   0            8d
+kube-system         aws-load-balancer-controller-7c48cfd896-gtjqt                     1/1     Running   0            8d
+kube-system         aws-node-2467n                                                    2/2     Running   0            10d
+kube-system         aws-node-4kz7k                                                    2/2     Running   0            10d
+kube-system         aws-node-kc9d2                                                    2/2     Running   0            10d
+kube-system         aws-node-wvn5x                                                    2/2     Running   0            8d
+kube-system         aws-node-zvtj9                                                    2/2     Running   0            8d
+kube-system         coredns-7c6d86668d-6l9nz                                          1/1     Running   0            22d
+kube-system         coredns-7c6d86668d-9ng2p                                          1/1     Running   0            22d
+kube-system         ebs-csi-controller-cc659655-4wgxv                                 6/6     Running   0            10d
+kube-system         ebs-csi-controller-cc659655-jt9qh                                 6/6     Running   0            10d
+kube-system         ebs-csi-node-8frv9                                                3/3     Running   0            10d
+kube-system         ebs-csi-node-gsjvc                                                3/3     Running   0            10d
+kube-system         ebs-csi-node-kjjl4                                                3/3     Running   0            8d
+kube-system         ebs-csi-node-phc4c                                                3/3     Running   0            8d
+kube-system         ebs-csi-node-sl5qx                                                3/3     Running   0            10d
+kube-system         eks-pod-identity-agent-5tjs8                                      1/1     Running   0            10d
+kube-system         eks-pod-identity-agent-6vt97                                      1/1     Running   0            10d
+kube-system         eks-pod-identity-agent-6zmg2                                      1/1     Running   0            8d
+kube-system         eks-pod-identity-agent-tkh48                                      1/1     Running   0            8d
+kube-system         eks-pod-identity-agent-vngnr                                      1/1     Running   0            10d
+kube-system         kube-proxy-6t7vj                                                  1/1     Running   0            22d
+kube-system         kube-proxy-c6qvk                                                  1/1     Running   0            8d
+kube-system         kube-proxy-s7ggv                                                  1/1     Running   0            22d
+kube-system         kube-proxy-x7cl4                                                  1/1     Running   0            8d
+kube-system         kube-proxy-z7kc8                                                  1/1     Running   0            22d
+radar               radar-5d6ff4df47-vsvvf                                            1/1     Running   0            12d
+bash-5.3$ 
+bash-5.3$ kubectl get pv,pvc -A
+No resources found
+bash-5.3$ 
+bash-5.3$ kubectl get storageclass
+NAME            PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+gp2             kubernetes.io/aws-ebs   Delete          WaitForFirstConsumer   false                  22d
+gp3 (default)   ebs.csi.aws.com         Delete          WaitForFirstConsumer   true                   10d
+bash-5.3$ 
+bash-5.3$ kubectl get pods -n kube-system | grep ebs-csi
+ebs-csi-controller-cc659655-4wgxv               6/6     Running   0          10d
+ebs-csi-controller-cc659655-jt9qh               6/6     Running   0          10d
+ebs-csi-node-8frv9                              3/3     Running   0          10d
+ebs-csi-node-gsjvc                              3/3     Running   0          10d
+ebs-csi-node-kjjl4                              3/3     Running   0          8d
+ebs-csi-node-phc4c                              3/3     Running   0          8d
+ebs-csi-node-sl5qx                              3/3     Running   0          10d
+bash-5.3$ 
+bash-5.3$ 
+bash-5.3$ aws eks describe-cluster --name ac-ws-dev-use2 --region us-east-2 \
+  --query "cluster.identity.oidc.issuer" --output text
+https://oidc.eks.us-east-2.amazonaws.com/id/<OIDC_ID>
+bash-5.3$ 
+bash-5.3$ aws iam list-open-id-connect-providers
+{
+    "OpenIDConnectProviderList": [
+        {
+            "Arn": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/<OIDC_ID>"
+        },
+        {
+            "Arn": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/<OIDC_ID>"
+        },
+        {
+            "Arn": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/<OIDC_ID>"
+        },
+        {
+            "Arn": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
+        }
+    ]
+}
+bash-5.3$ 

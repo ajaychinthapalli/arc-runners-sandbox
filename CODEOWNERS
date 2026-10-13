@@ -1,0 +1,18 @@
+# Default owners for this repository
+* @ajaychinthapalli
+
+# Platform and automation
+/.github/ @ajaychinthapalli
+/manifests/ @ajaychinthapalli
+/iam/ @ajaychinthapalli
+
+# Operational assets and docs
+/docs/ @ajaychinthapalli
+/logs/ @ajaychinthapalli
+/reports/ @ajaychinthapalli
+/images/ @ajaychinthapalli
+/tools/ @ajaychinthapalli
+
+# Root docs
+README.md @ajaychinthapalli
+CONTRIBUTING.md @ajaychinthapalli

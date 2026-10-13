@@ -1,0 +1,129 @@
+bash-5.3$ helm show chart oci://ghcr.io/kagent-dev/kagent/helm/kagent --version 0.10.3
+Pulled: ghcr.io/kagent-dev/kagent/helm/kagent:0.10.3
+Digest: sha256:2f355400c760116e830cd7e86e7046477d480fb7dc309131832c51d65dfe9063
+apiVersion: v2
+dependencies:
+- condition: kmcp.enabled
+  name: kmcp
+  repository: oci://ghcr.io/kagent-dev/kmcp/helm
+  version: 0.3.0
+- condition: substrate.enabled
+  name: substrate
+  repository: oci://ghcr.io/kagent-dev/substrate/helm
+  version: 0.0.9
+- condition: kagent-tools.enabled
+  name: kagent-tools
+  repository: oci://ghcr.io/kagent-dev/tools/helm
+  version: 0.3.0
+- condition: grafana-mcp.enabled, observability-agent.enabled
+  name: grafana-mcp
+  repository: file://../tools/grafana-mcp
+  version: 0.10.3
+- condition: k8s-agent.enabled
+  name: k8s-agent
+  repository: file://../agents/k8s
+  version: 0.10.3
+- condition: kgateway-agent.enabled
+  name: kgateway-agent
+  repository: file://../agents/kgateway
+  version: 0.10.3
+- condition: istio-agent.enabled
+  name: istio-agent
+  repository: file://../agents/istio
+  version: 0.10.3
+- condition: promql-agent.enabled
+  name: promql-agent
+  repository: file://../agents/promql
+  version: 0.10.3
+- condition: observability-agent.enabled
+  name: observability-agent
+  repository: file://../agents/observability
+  version: 0.10.3
+- condition: argo-rollouts-agent.enabled
+  name: argo-rollouts-agent
+  repository: file://../agents/argo-rollouts
+  version: 0.10.3
+- condition: helm-agent.enabled
+  name: helm-agent
+  repository: file://../agents/helm
+  version: 0.10.3
+- condition: cilium-policy-agent.enabled
+  name: cilium-policy-agent
+  repository: file://../agents/cilium-policy
+  version: 0.10.3
+- condition: cilium-manager-agent.enabled
+  name: cilium-manager-agent
+  repository: file://../agents/cilium-manager
+  version: 0.10.3
+- condition: cilium-debug-agent.enabled
+  name: cilium-debug-agent
+  repository: file://../agents/cilium-debug
+  version: 0.10.3
+- condition: oauth2-proxy.enabled
+  name: oauth2-proxy
+  repository: https://oauth2-proxy.github.io/manifests
+  version: ~10.7.0
+description: A Helm chart for kagent, built with Google ADK
+name: kagent
+type: application
+version: 0.10.3
+
+# ---- ~90s after the first install (installed WITHOUT the overrides file) ----
+
+bash-5.3$ kubectl get pods -n kagent
+NAME                                              READY   STATUS                       RESTARTS      AGE
+argo-rollouts-conversion-agent-5b6d5f8dbd-pwjgf   0/1     CreateContainerConfigError   0             72s
+argo-rollouts-conversion-agent-74bc6ddbd-vk4kp    0/1     CreateContainerConfigError   0             71s
+cilium-debug-agent-6d855ffdfb-5wmnl               0/1     CreateContainerConfigError   0             72s
+cilium-manager-agent-bb8d45447-rwqnx              0/1     CreateContainerConfigError   0             72s
+cilium-policy-agent-58d4b76c69-vn564              0/1     CreateContainerConfigError   0             71s
+helm-agent-7f8598c45c-rvl8r                       0/1     CreateContainerConfigError   0             71s
+istio-agent-85d79f55d6-97gkc                      0/1     CreateContainerConfigError   0             71s
+k8s-agent-cd654dfcb-72mmj                         0/1     CreateContainerConfigError   0             71s
+kagent-controller-c756c574c-ttbn5                 1/1     Running                      2 (86s ago)   89s
+kagent-grafana-mcp-5c777c576-fcnp4                1/1     Running                      0             89s
+kagent-kmcp-controller-manager-76bb479b6-zq955    1/1     Running                      0             89s
+kagent-postgresql-76d7c858f4-t7j24                1/1     Running                      0             88s
+kagent-tools-b558b665b-kjpq8                      1/1     Running                      0             89s
+kagent-ui-86df779686-cl75z                        1/1     Running                      0             89s
+kgateway-agent-6b57d56d67-2zbvv                   0/1     CreateContainerConfigError   0             72s
+observability-agent-5d7f498c4d-dqvfm              0/1     CreateContainerConfigError   0             72s
+promql-agent-75cc85b5c9-h2s9s                     0/1     CreateContainerConfigError   0             72s
+
+# Cause: the 10 bundled demo agents reference the default provider's API key secret, which was never created.
+# The controller CrashLoopBackOff (see log 05) self-healed after 2 restarts once PostgreSQL was ready.
+
+# ---- Fix: disable demo agents with kagent-overrides.yaml ----
+
+bash-5.3$ helm upgrade kagent oci://ghcr.io/kagent-dev/kagent/helm/kagent \
+  --namespace kagent --version $KAGENT_VERSION \
+  -f kagent-values.yaml -f kagent-overrides.yaml
+Pulled: ghcr.io/kagent-dev/kagent/helm/kagent:0.10.3
+Digest: sha256:2f355400c760116e830cd7e86e7046477d480fb7dc309131832c51d65dfe9063
+Release "kagent" has been upgraded. Happy Helming!
+NAME: kagent
+LAST DEPLOYED: Mon Oct 12 22:03:54 2026
+NAMESPACE: kagent
+STATUS: deployed
+REVISION: 2
+DESCRIPTION: Upgrade complete
+TEST SUITE: None
+NOTES:
+...
+ENABLED TOOLS:
+  - Tool Server: Kagent's Built-in tools
+
+ENABLED AGENTS:
+...
+bash-5.3$
+bash-5.3$ kubectl get agents -n kagent
+No resources found in kagent namespace.
+bash-5.3$
+bash-5.3$ kubectl get pods -n kagent
+NAME                                             READY   STATUS    RESTARTS        AGE
+kagent-controller-c756c574c-ttbn5                1/1     Running   2 (2m32s ago)   2m35s
+kagent-kmcp-controller-manager-76bb479b6-zq955   1/1     Running   0               2m35s
+kagent-postgresql-76d7c858f4-t7j24               1/1     Running   0               2m34s
+kagent-tools-b558b665b-kjpq8                     1/1     Running   0               2m35s
+kagent-ui-86df779686-cl75z                       1/1     Running   0               2m35s
+bash-5.3$

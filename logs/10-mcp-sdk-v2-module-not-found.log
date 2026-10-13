@@ -1,0 +1,24 @@
+bash-5.3$ kubectl apply -f arc-release-info.yaml
+serviceaccount/arc-release-info created
+clusterrole.rbac.authorization.k8s.io/arc-release-info-crd-reader created
+clusterrolebinding.rbac.authorization.k8s.io/arc-release-info-crd-reader created
+deployment.apps/arc-release-info created
+service/arc-release-info created
+remotemcpserver.kagent.dev/arc-release-info created
+Waiting for deployment "arc-release-info" rollout to finish: 0 of 1 updated replicas are available...
+deployment "arc-release-info" successfully rolled out
+
+bash-5.3$ kubectl logs deploy/arc-release-info -n kagent --tail=20
+Traceback (most recent call last):
+  File "/app/server.py", line 3, in <module>
+    from mcp.server.fastmcp import FastMCP
+  File "/usr/local/lib/python3.12/site-packages/mcp/server/fastmcp.py", line 16, in <module>
+    raise ModuleNotFoundError(_MESSAGE, name=__name__)
+ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x, where FastMCP was renamed to MCPServer (from mcp.server.mcpserver import MCPServer) and other APIs changed; see the migration guide at https://py.sdk.modelcontextprotocol.io/v2/migration/#fastmcp-renamed-to-mcpserver or pin 'mcp<2' to keep running v1 code.
+bash-5.3$
+bash-5.3$ kubectl get remotemcpserver arc-release-info -n kagent
+NAME               PROTOCOL          URL                                       ACCEPTED
+arc-release-info   STREAMABLE_HTTP   http://arc-release-info.kagent:8080/mcp   False
+
+# Cause: the Dockerfile installed "mcp[cli]" unpinned and pip resolved the 2.x SDK, which renamed FastMCP.
+# Fix: pin "mcp[cli]<2", rebuild as 0.1.1, `kubectl set image` (see log 11).

@@ -1,0 +1,85 @@
+# ---- Inspect the bundled kagent tool server before copying it ----
+
+bash-5.3$ kubectl get deploy,svc -n kagent -l app.kubernetes.io/name=kagent-tools --show-labels
+NAME                           READY   UP-TO-DATE   AVAILABLE   AGE   LABELS
+deployment.apps/kagent-tools   1/1     1            1           22m   app.kubernetes.io/instance=kagent,app.kubernetes.io/managed-by=Helm,app.kubernetes.io/name=kagent-tools,app.kubernetes.io/version=0.3.0,helm.sh/chart=kagent-tools-0.3.0
+
+NAME                           TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE   LABELS
+service/kagent-tools           ClusterIP   10.100.164.138   <none>        8084/TCP   22m   ...
+service/kagent-tools-metrics   ClusterIP   10.100.159.170   <none>        8085/TCP   22m   ...
+[{"name":"tools","port":8084,"protocol":"TCP","targetPort":8084}]
+NAME                 PROTOCOL          URL                                   ACCEPTED
+kagent-tool-server   STREAMABLE_HTTP   http://kagent-tools.kagent:8084/mcp   True
+
+bash-5.3$ kubectl get remotemcpserver kagent-tool-server -n kagent -o yaml \
+  | grep -A2000 'discoveredTools' | grep 'name: k8s_' | sed 's/.*name: //'
+k8s_annotate_resource
+k8s_apply_manifest
+k8s_check_service_connectivity
+k8s_create_resource
+k8s_create_resource_from_url
+k8s_delete_resource
+k8s_describe_resource            <- READ (allowed)
+k8s_execute_command
+k8s_generate_resource
+k8s_get_available_api_resources  <- READ (allowed)
+k8s_get_cluster_configuration
+k8s_get_events                   <- READ (allowed)
+k8s_get_pod_logs
+k8s_get_resource_yaml            <- READ (allowed)
+k8s_get_resources                <- READ (allowed)
+k8s_label_resource
+k8s_patch_resource
+k8s_patch_status
+k8s_remove_annotation
+k8s_remove_label
+k8s_rollout
+k8s_scale
+k8s_wait
+
+bash-5.3$ kubectl get deploy kagent-tools -n kagent \
+  -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\n"}{.image}{"\n"}{.args}{"\n"}{.command}{"\n"}{.env}{"\n"}{end}'
+tools
+ghcr.io/kagent-dev/kagent/tools:0.3.0
+["--port","8084","--metrics-port","8085"]
+["/tool-server"]
+[{"name":"KAGENT_NAMESPACE",...},{"name":"OPENAI_API_KEY",...optional...},{"name":"OTEL_TRACING_ENABLED","value":"false"},...,{"name":"TOKEN_PASSTHROUGH","value":"false"},...]
+
+# ---- Apply the read-only copy ----
+
+bash-5.3$ kubectl apply -f arc-k8s-readonly.yaml
+serviceaccount/arc-k8s-readonly created
+clusterrole.rbac.authorization.k8s.io/arc-upgrade-readiness-readonly created
+clusterrolebinding.rbac.authorization.k8s.io/arc-k8s-readonly created
+deployment.apps/arc-k8s-readonly created
+service/arc-k8s-readonly created
+remotemcpserver.kagent.dev/arc-k8s-readonly created
+bash-5.3$ kubectl rollout status deploy/arc-k8s-readonly -n kagent
+deployment "arc-k8s-readonly" successfully rolled out
+bash-5.3$ kubectl get remotemcpserver arc-k8s-readonly -n kagent
+NAME               PROTOCOL          URL                                       ACCEPTED
+arc-k8s-readonly   STREAMABLE_HTTP   http://arc-k8s-readonly.kagent:8084/mcp   False
+
+# ---- Diagnose ----
+
+bash-5.3$ kubectl get remotemcpserver arc-k8s-readonly -n kagent \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}: {.message}{"\n"}{end}'
+Accepted=True Reconciled: Remote MCP server configuration accepted
+bash-5.3$ kubectl get pods -n kagent -l app=arc-k8s-readonly
+NAME                                READY   STATUS    RESTARTS   AGE
+arc-k8s-readonly-78fbd9c678-thpt7   1/1     Running   0          2m20s
+bash-5.3$ kubectl logs deploy/arc-k8s-readonly -n kagent --tail=30
+time=2026-10-13T05:26:38.802Z level=INFO msg="OpenTelemetry SDK successfully initialized"
+time=2026-10-13T05:26:38.802Z level=INFO msg="Starting kagent-tools-server" version=0.3.0 git_commit=7d3fde6 build_date=2026-09-24
+time=2026-10-13T05:26:38.822Z level=INFO msg="RegisterTools initialized"
+time=2026-10-13T05:26:38.839Z level=INFO msg="Starting Prometheus metrics endpoint on /metrics" port=8085
+time=2026-10-13T05:26:38.839Z level=INFO msg="Running KAgent Tools Server" port=:8084 tools=""
+bash-5.3$ kubectl logs deploy/kagent-controller -n kagent --tail=50 | grep -i arc-k8s-readonly
+{"level":"info","ts":"2026-10-13T05:26:38Z","logger":"reconciler","msg":"registering remote MCP server","remoteMCPServer":"kagent/arc-k8s-readonly","url":"http://arc-k8s-readonly.kagent:8084/mcp","protocol":"STREAMABLE_HTTP"}
+{"level":"error","ts":"2026-10-13T05:26:38Z","logger":"reconciler","msg":"failed to upsert tool server for remote mcp server","remoteMCPServer":"kagent/arc-k8s-readonly","duration":0.005591306,"error":"failed to fetch tools for toolServer kagent/arc-k8s-readonly: failed to connect client for toolServer kagent/arc-k8s-readonly: calling \"initialize\": sending \"initialize\": rejected by transport: Post \"http://arc-k8s-readonly.kagent:8084/mcp\": dial tcp 10.100.170.78:8084: connect: connection refused", ...}
+{"level":"info","ts":"2026-10-13T05:27:38Z","logger":"reconciler","msg":"registering remote MCP server","remoteMCPServer":"kagent/arc-k8s-readonly","url":"http://arc-k8s-readonly.kagent:8084/mcp","protocol":"STREAMABLE_HTTP"}
+{"level":"info","ts":"2026-10-13T05:27:38Z","logger":"reconciler","msg":"successfully registered remote MCP server","remoteMCPServer":"kagent/arc-k8s-readonly","url":"http://arc-k8s-readonly.kagent:8084/mcp","toolCount":126,"duration":0.05433411}
+{"level":"info","ts":"2026-10-13T05:28:38Z","logger":"reconciler","msg":"successfully registered remote MCP server","remoteMCPServer":"kagent/arc-k8s-readonly","url":"http://arc-k8s-readonly.kagent:8084/mcp","toolCount":126,"duration":0.019123861}
+
+# Cause: startup race. The controller's first reconcile hit the Service milliseconds before the
+# server listened on :8084 ("connection refused"). The 60s periodic reconcile succeeded.

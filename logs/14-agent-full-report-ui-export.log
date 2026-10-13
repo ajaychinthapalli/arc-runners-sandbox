@@ -1,0 +1,316 @@
+Home
+Create
+View
+Contribute
+Community
+Toggle theme
+
+kagent/arc-upgrade-readiness
+Bedrock (us.anthropic.claude-sonnet-4-6)
+New Chat
+
+Today
+Assess upgrading ARC...
+11:03 PM
+More
+
+user
+Assess upgrading ARC from 0.14.2 to the latest gha-runner-scale-set release.
+
+9 tool calls
+9succeeded
+arc-latest, k8s-get-resources, k8s-get-resource-yaml +3
+kagent/arc-upgrade-readiness
+I have all the data I need. Here is the full assessment.
+
+ARC Upgrade Readiness Assessment
+
+Upgrade path: 0.14.2 → 0.15.0
+
+🔴 NO-GO — Blockers must be resolved before upgrading
+
+Inventory
+
+Component	Resource	Namespace	Chart	Image	Container Mode
+Controller	arc-gha-rs-controller	arc-systems	gha-rs-controller-0.14.2	ghcr.io/actions/gha-runner-scale-set-controller:0.14.2	—
+Scale Set	arc-runner-set	arc-runners	gha-rs-0.14.2	ghcr.io/actions/actions-runner:**latest**	Kubernetes (pod-mode)
+🚨 Blockers — Must fix before upgrade
+
+1. CRDs must be applied manually first
+
+All 4 CRDs have changed in 0.15.0. Helm does not upgrade CRDs automatically. If you run helm upgrade without pre-applying the new CRDs, the controller will run against stale API schemas and behaviour is undefined.
+
+CRD	Status
+autoscalinglisteners.actions.github.com	⚠️ Changed
+autoscalingrunnersets.actions.github.com	⚠️ Changed
+ephemeralrunners.actions.github.com	⚠️ Changed
+ephemeralrunnersets.actions.github.com	⚠️ Changed
+Required action — apply CRDs from the 0.15.0 chart bundle before running helm upgrade:
+
+helm show crds \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+  --version 0.15.0 | kubectl apply -f -
+
+⚠️ Fix Before Upgrade
+
+2. Runner image pinned to latest — unacceptable for production
+
+arc-runner-set uses ghcr.io/actions/actions-runner:latest. This is a floating tag — you cannot know what version is running, rollback is impossible, and the image may silently change between pod restarts. The current latest actions/runner release is v2.338.0.
+
+Required action — pin the runner image in your scale set values.yaml:
+
+template:
+  spec:
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.338.0
+
+3. Runner image is outdated (relative to latest runner release)
+
+Even if pinned today, the latest tag resolves to an image that is almost certainly behind the current runner release v2.338.0. The release notes for 0.15.0 bundle runner v2.337.0 internally; anything older has known bugs fixed in later releases.
+
+ℹ️ Warnings
+
+4. Notable behavioral changes in 0.15.0 to be aware of
+
+The 0.15.0 release is a significant internal refactor. Key changes that may affect your environment:
+
+Area	Change
+Reconciliation model	Resources are now upgraded in-place (1-1 mapping between AutoscalingRunnerSet and EphemeralRunnerSet). The actions.github.com/change-hash annotation is removed in favour of metadata.generation tracking.
+Status fields removed	AutoscalingRunnerSet printer columns for pendingRunners, runningRunners, finishedRunners, deletingRunners are removed — replaced by metrics. Any dashboards or scripts reading these fields will break.
+Listener drift detection	Listener pod is now replaced by comparing the pod spec directly (not a hash). Expect a one-time listener pod restart on first upgrade.
+--default-max-concurrent-reconciles flag removed	If you pass this flag in your controller values.yaml → args, the controller will fail to start. The flag is replaced by per-controller settings.
+Outdated runner lifecycle	Runners in an Outdated phase now cause the scale set to switch off (drain) rather than rebuild immediately. This changes draining behaviour during rolling upgrades.
+Metadata validation	Chart now rejects integer values in labels/annotations at render time (helm upgrade will error out if any are present).
+Scale-set re-registration	Scale sets that disappear from the Actions service are now automatically re-registered — no manual intervention needed.
+Secret deletion handling	Deleting the githubConfigSecret now cleanly releases the AutoscalingRunnerSet finalizer.
+5. Zero active EphemeralRunners — good timing
+
+✅ There are 0 running EphemeralRunners across all scale sets. This is the ideal window to upgrade with no in-flight job disruption.
+
+Upgrade-Day Sequence
+
+Complete all Blockers and Fix Before Upgrade items first.
+
+Step 1 — Verify no jobs are running (already confirmed: 0 EphemeralRunners)
+         kubectl get ephemeralrunners -A
+
+Step 2 — Apply updated CRDs from the 0.15.0 chart
+         helm show crds \
+           oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+           --version 0.15.0 | kubectl apply -f -
+
+Step 3 — Upgrade the controller (namespace: arc-systems, release: arc)
+         helm upgrade arc \
+           oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+           --version 0.15.0 \
+           --namespace arc-systems \
+           --reuse-values
+
+         # Verify controller is healthy
+         kubectl rollout status deployment/arc-gha-rs-controller -n arc-systems
+
+Step 4 — Upgrade scale set: arc-runner-set (namespace: arc-runners)
+         # Ensure your values.yaml pins the runner image to 2.338.0 first!
+         helm upgrade arc-runner-set \
+           oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-runner-scale-set \
+           --version 0.15.0 \
+           --namespace arc-runners \
+           --reuse-values \
+           --set template.spec.containers[0].image=ghcr.io/actions/actions-runner:2.338.0
+
+Step 5 — Confirm scale set phase is Running
+         kubectl get autoscalingrunnerset arc-runner-set -n arc-runners
+
+Step 6 — Update any dashboards/alerts that read status sub-fields
+         (pendingRunners, runningRunners, etc.) — switch them to metrics.
+Summary
+
+#	Finding	Severity
+1	All 4 CRDs changed — must kubectl apply before helm upgrade	🔴 Blocker
+2	Runner image uses floating latest tag	🟠 Fix before upgrade
+3	Runner image likely behind latest v2.338.0	🟠 Fix before upgrade
+4	--default-max-concurrent-reconciles flag removed in 0.15.0	🟠 Check your values
+5	Status printer columns removed — dashboards may break	🟡 Warning
+6	Large internal reconciliation refactor — validate in staging first	🟡 Warning
+7	0 running EphemeralRunners — ideal upgrade window	✅ Good
+
+
+
+user
+result in markdown format
+kagent/arc-upgrade-readiness
+Here is the full assessment as clean Markdown:
+
+# ARC Upgrade Readiness Assessment
+
+**Upgrade path:** `0.14.2` → `0.15.0`
+**Verdict:** 🔴 NO-GO — Blockers must be resolved before upgrading
+
+---
+
+## Inventory
+
+| Component | Resource | Namespace | Chart | Image | Container Mode |
+|---|---|---|---|---|---|
+| **Controller** | `arc-gha-rs-controller` | `arc-systems` | `gha-rs-controller-0.14.2` | `ghcr.io/actions/gha-runner-scale-set-controller:0.14.2` | — |
+| **Scale Set** | `arc-runner-set` | `arc-runners` | `gha-rs-0.14.2` | `ghcr.io/actions/actions-runner:latest` | Kubernetes (pod-mode) |
+
+---
+
+## 🚨 Blockers — Must fix before upgrade
+
+### 1. CRDs must be applied manually first
+
+All **4 CRDs** have changed in 0.15.0. Helm does **not** upgrade CRDs
+automatically. Running `helm upgrade` without pre-applying the new CRDs will
+leave the controller running against stale API schemas.
+
+| CRD | Status |
+|---|---|
+| `autoscalinglisteners.actions.github.com` | ⚠️ Changed |
+| `autoscalingrunnersets.actions.github.com` | ⚠️ Changed |
+| `ephemeralrunners.actions.github.com` | ⚠️ Changed |
+| `ephemeralrunnersets.actions.github.com` | ⚠️ Changed |
+
+Apply CRDs from the 0.15.0 chart bundle **before** running `helm upgrade`:
+
+```bash
+helm show crds \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+  --version 0.15.0 | kubectl apply -f -
+
+🟠 Fix Before Upgrade
+
+2. Runner image pinned to latest — unacceptable for production
+
+arc-runner-set uses ghcr.io/actions/actions-runner:latest. This is a floating tag — the running version is unknown, rollback is impossible, and the image may silently change between pod restarts.
+The current latest actions/runner release is v2.338.0.
+
+Pin the runner image in your scale set values.yaml:
+
+template:
+  spec:
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.338.0
+
+3. Runner image is outdated relative to latest runner release
+
+The latest tag almost certainly resolves to a runner older than v2.338.0. The 0.15.0 chart bundles runner v2.337.0 internally; anything older carries known bugs fixed in later releases.
+
+4. --default-max-concurrent-reconciles flag removed in 0.15.0
+
+If this flag is present in your controller values.yaml under args, the controller pod will fail to start after upgrade. It has been replaced by per-controller settings.
+
+Check your current args:
+
+kubectl get deployment arc-gha-rs-controller -n arc-systems \
+  -o jsonpath='{.spec.template.spec.containers[0].args}'
+
+Remove --default-max-concurrent-reconciles from your values.yaml before upgrading.
+
+🟡 Warnings
+
+5. Significant behavioral changes in 0.15.0
+
+Area	Change
+Reconciliation model	Resources upgraded in-place (1-1 mapping between AutoscalingRunnerSet and EphemeralRunnerSet). The actions.github.com/change-hash annotation is removed; tracking now uses metadata.generation.
+Status fields removed	AutoscalingRunnerSet printer columns pendingRunners, runningRunners, finishedRunners, deletingRunners are removed — replaced by metrics. Dashboards or scripts reading these fields will break.
+Listener drift detection	Listener pod is now replaced by comparing the pod spec directly (not a hash). Expect a one-time listener pod restart on first upgrade.
+Outdated runner lifecycle	Runners in an Outdated phase now cause the scale set to switch off (drain) rather than rebuild immediately. This changes draining behaviour during rolling upgrades.
+Metadata validation	Chart now rejects integer values in labels/annotations at render time. helm upgrade will error if any are present.
+Scale-set re-registration	Scale sets that disappear from the Actions service are now automatically re-registered — no manual intervention needed.
+Secret deletion handling	Deleting the githubConfigSecret now cleanly releases the AutoscalingRunnerSet finalizer.
+6. Validate in staging first
+
+The 0.15.0 release is a large internal reconciliation refactor. Run it in a non-production environment before rolling to production.
+
+✅ 7. Zero active EphemeralRunners — good upgrade window
+
+There are 0 running EphemeralRunners across all scale sets. This is the ideal time to upgrade with no in-flight job disruption.
+
+Upgrade-Day Sequence
+
+Complete all Blockers and Fix Before Upgrade items first.
+
+# Step 1 — Confirm no jobs are running
+kubectl get ephemeralrunners -A
+
+# Step 2 — Apply updated CRDs from the 0.15.0 chart
+helm show crds \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+  --version 0.15.0 | kubectl apply -f -
+
+# Step 3 — Upgrade the controller (release: arc, namespace: arc-systems)
+helm upgrade arc \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-controller \
+  --version 0.15.0 \
+  --namespace arc-systems \
+  --reuse-values
+
+# Verify controller is healthy
+kubectl rollout status deployment/arc-gha-rs-controller -n arc-systems
+
+# Step 4 — Upgrade scale set: arc-runner-set (namespace: arc-runners)
+#           Ensure runner image is pinned in values.yaml before this step.
+helm upgrade arc-runner-set \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-rs-runner-scale-set \
+  --version 0.15.0 \
+  --namespace arc-runners \
+  --reuse-values \
+  --set template.spec.containers[0].image=ghcr.io/actions/actions-runner:2.338.0
+
+# Step 5 — Confirm scale set phase is Running
+kubectl get autoscalingrunnerset arc-runner-set -n arc-runners
+
+# Step 6 — Update dashboards/alerts that read status sub-fields
+#           (pendingRunners, runningRunners, etc.) — migrate them to metrics.
+
+Summary
+
+#	Finding	Severity
+1	All 4 CRDs changed — must kubectl apply before helm upgrade	🔴 Blocker
+2	Runner image uses floating latest tag	🟠 Fix before upgrade
+3	Runner image likely behind latest v2.338.0	🟠 Fix before upgrade
+4	--default-max-concurrent-reconciles flag removed in 0.15.0	🟠 Fix before upgrade
+5	Status printer columns removed — dashboards may break	🟡 Warning
+6	Large internal reconciliation refactor — validate in staging first	🟡 Warning
+7	0 running EphemeralRunners — ideal upgrade window	✅ Good
+
+
+
+Ready
+Usage:
+31468
+26791
+4677
+
+
+
+
+Send
+Agent Details
+kagent/arc-upgrade-readiness
+us.anthropic.claude-sonnet-4-6
+Checks whether an ARC controller and scale set upgrade is safe
+Tools & Agents
+
+k8s_get_resources (kagent/arc-k8s-readonly)
+
+k8s_describe_resource (kagent/arc-k8s-readonly)
+
+k8s_get_resource_yaml (kagent/arc-k8s-readonly)
+
+k8s_get_events (kagent/arc-k8s-readonly)
+
+k8s_get_available_api_resources (kagent/arc-k8s-readonly)
+
+arc_latest (kagent/arc-release-info)
+
+arc_releases (kagent/arc-release-info)
+
+runner_latest (kagent/arc-release-info)
+
+crd_diff (kagent/arc-release-info)
+is an open source project

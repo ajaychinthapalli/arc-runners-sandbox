@@ -1,0 +1,7 @@
+name: disruption-test
+on: workflow_dispatch
+jobs:
+  long:
+    runs-on: arc-runner-set
+    steps:
+      - run: for i in $(seq 1 10); do echo "minute $i"; sleep 60; done
